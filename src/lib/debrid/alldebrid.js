@@ -32,7 +32,7 @@ export default class AllDebrid {
   }
 
   async getProgressTorrents(torrents){
-    const res = await this.#request('GET', '/magnet/status');
+    const res = await this.#request('GET', '.1/magnet/status');
     return res.data.magnets.reduce((progress, magnet) => {
       progress[magnet.hash] = {
         percent: magnet.processingPerc || 0,
@@ -63,8 +63,9 @@ export default class AllDebrid {
   }
 
   async getDownload(file){
-    const query = {link: file.url};
-    const res = await this.#request('GET', '/link/unlock', {query});
+    const body = new FormData();
+    body.append('link', file.url);
+    const res = await this.#request('POST', '/link/unlock', {body});
     return res.data.link;
   }
 
@@ -75,18 +76,23 @@ export default class AllDebrid {
   async #getFilesFromTorrent(id){
 
     const query = {id};
-    let torrent = (await this.#request('GET', '/magnet/status', {query})).data.magnets;
+    let torrent = (await this.#request('GET', '.1/magnet/status', {query})).data.magnets;
 
     if(torrent.status != 'Ready'){
       throw new Error(ERROR.NOT_READY);
     }
 
-    return torrent.links.map((file, index) => {
+    const body = new FormData();
+    body.append('id[]', id);
+    const filesRes = await this.#request('POST', '/magnet/files', {body});
+    const magnetFiles = filesRes.data.magnets[0] || filesRes.data.magnets;
+
+    return magnetFiles.files.map((file, index) => {
       return {
-        name: file.filename,
-        size: file.size,
+        name: file.n,
+        size: file.s,
         id: `${torrent.id}:${index}`,
-        url: file.link,
+        url: file.l,
         ready: true
       };
     });
