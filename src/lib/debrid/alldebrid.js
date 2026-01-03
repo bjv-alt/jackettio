@@ -78,6 +78,8 @@ export default class AllDebrid {
     const query = {id};
     let torrent = (await this.#request('GET', '.1/magnet/status', {query})).data.magnets;
 
+    console.log(`Torrent ${id} status:`, torrent.status, 'statusCode:', torrent.statusCode);
+    
     if(torrent.status != 'Ready'){
       throw new Error(ERROR.NOT_READY);
     }
@@ -87,12 +89,33 @@ export default class AllDebrid {
     const filesRes = await this.#request('POST', '/magnet/files', {body});
     const magnetFiles = filesRes.data.magnets[0] || filesRes.data.magnets;
 
-    return magnetFiles.files.map((file, index) => {
+    // Flatten the file tree structure recursively
+    const flattenFiles = (items, path = '') => {
+      const files = [];
+      for (const item of items) {
+        if (item.e) {
+          // It's a folder, recurse into it
+          files.push(...flattenFiles(item.e, path ? `${path}/${item.n}` : item.n));
+        } else if (item.l) {
+          // It's a file
+          files.push({
+            name: path ? `${path}/${item.n}` : item.n,
+            size: item.s,
+            url: item.l
+          });
+        }
+      }
+      return files;
+    };
+
+    const allFiles = flattenFiles(magnetFiles.files);
+
+    return allFiles.map((file, index) => {
       return {
-        name: file.n,
-        size: file.s,
+        name: file.name,
+        size: file.size,
         id: `${torrent.id}:${index}`,
-        url: file.l,
+        url: file.url,
         ready: true
       };
     });
